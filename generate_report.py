@@ -25,8 +25,12 @@ def add_indicators(df):
     return df
 
 def safe_float(val):
-    """Ensure values are floats (not Series)."""
+    """Ensure values are floats (handles Series and numpy)."""
     try:
+        if hasattr(val, "iloc"):   # Pandas Series
+            return float(val.iloc[0])
+        elif hasattr(val, "__len__") and not isinstance(val, str):  # numpy array
+            return float(val[0])
         return float(val)
     except Exception:
         return None
@@ -52,11 +56,14 @@ def get_latest_prediction():
         X = latest[all_features].values.reshape(1, -1)
 
         if X.shape[1] == model.n_features_in_:
-            pred_price = model.predict(X)[0]
+            pred_price = model.predict(X)
         else:
             print(f"⚠️ Model expects {model.n_features_in_} features, adjusting...")
             X = latest[all_features[:model.n_features_in_]].values.reshape(1, -1)
-            pred_price = model.predict(X)[0]
+            pred_price = model.predict(X)
+
+        # Make sure pred_price is a scalar float
+        pred_price = float(pred_price[0])
 
     except Exception as e:
         print("⚠️ No model prediction:", e)
