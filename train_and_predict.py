@@ -114,3 +114,7 @@ plt.savefig("btc_volume.png")
 plt.close()
 
 print("📊 Plots saved: btc_prediction.png, btc_rsi.png, btc_macd.png, btc_volume.png")
+from generate_report import generate_report
+
+# After training and plots:
+generate_report(rmse)
