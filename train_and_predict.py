@@ -3,108 +3,138 @@ import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
 from sklearn.linear_model import LinearRegression
-from sklearn.metrics import mean_squared_error, r2_score
-import datetime
+import joblib
+import os
+from datetime import datetime, timedelta
 
-# =========================
-# Helper functions
-# =========================
-def add_indicators(df):
-    # Moving averages with min_periods=1 (keeps early rows)
-    df["MA50"] = df["Close"].rolling(window=50, min_periods=1).mean()
-    df["MA200"] = df["Close"].rolling(window=200, min_periods=1).mean()
-    df["RSI"] = compute_rsi(df["Close"], 14)
-    return df
 
+# ========= Compute Indicators =========
 def compute_rsi(series, period=14):
+    """Compute Relative Strength Index (RSI)"""
     delta = series.diff()
-    gain = np.where(delta > 0, delta, 0)
-    loss = np.where(delta < 0, -delta, 0)
 
-    avg_gain = pd.Series(gain).rolling(window=period, min_periods=1).mean()
-    avg_loss = pd.Series(loss).rolling(window=period, min_periods=1).mean()
+    gain = delta.clip(lower=0)   # positive changes
+    loss = -delta.clip(upper=0)  # negative changes as positive
+
+    avg_gain = gain.rolling(window=period, min_periods=1).mean()
+    avg_loss = loss.rolling(window=period, min_periods=1).mean()
 
     rs = avg_gain / (avg_loss + 1e-10)  # avoid division by zero
     rsi = 100 - (100 / (1 + rs))
     return rsi
 
-def plot_prices(df):
-    plt.figure(figsize=(12,6))
-    plt.plot(df.index, df["Close"], label="BTC Close", color="blue")
-    plt.plot(df.index, df["MA50"], label="MA50", color="orange")
-    plt.plot(df.index, df["MA200"], label="MA200", color="red")
-    plt.title("BTC Price with Moving Averages")
-    plt.xlabel("Date")
-    plt.ylabel("Price (USD)")
-    plt.legend()
-    plt.grid(True)
-    plt.show()
 
-def plot_rsi(df):
-    plt.figure(figsize=(12,4))
-    plt.plot(df.index, df["RSI"], label="RSI", color="green")
-    plt.axhline(70, color="red", linestyle="--")
-    plt.axhline(30, color="blue", linestyle="--")
-    plt.title("Relative Strength Index (RSI)")
-    plt.xlabel("Date")
-    plt.ylabel("RSI")
-    plt.legend()
-    plt.grid(True)
-    plt.show()
+def add_indicators(df):
+    """Add RSI, MACD, and Volume indicators to dataframe"""
+    # RSI
+    df["RSI"] = compute_rsi(df["Close"], 14)
 
-def plot_volume(df):
-    plt.figure(figsize=(12,4))
-    plt.bar(df.index, df["Volume"], color="purple", alpha=0.6, width=1.0)
-    plt.title("BTC Trading Volume")
-    plt.xlabel("Date")
-    plt.ylabel("Volume")
-    plt.grid(True)
-    plt.show()
+    # MACD
+    exp1 = df["Close"].ewm(span=12, adjust=False).mean()
+    exp2 = df["Close"].ewm(span=26, adjust=False).mean()
+    df["MACD"] = exp1 - exp2
 
-# =========================
-# Main pipeline
-# =========================
+    # Volume (already exists, but ensure column name is consistent)
+    df["Volume"] = df["Volume"]
+
+    return df
+
+
+# ========= Train and Predict =========
 def train_and_predict():
-    start = "2014-01-01"
-    end = datetime.datetime.today().strftime("%Y-%m-%d")
+    print("📥 Downloading BTC-USD data...")
+    end = datetime.today()
+    start = end - timedelta(days=5 * 365)  # last 5 years
 
-    # Download BTC data
     df = yf.download("BTC-USD", start=start, end=end)
+
+    if df.empty:
+        raise ValueError("❌ No data downloaded from yfinance. Try again later.")
+
+    print("✅ Data downloaded:", df.shape)
 
     # Add indicators
     df = add_indicators(df)
-    df.dropna(inplace=True)  # should keep early rows now
 
-    if df.empty or len(df) < 100:
-        raise ValueError("Not enough data after indicators. Check date range or reduce MA windows.")
+    # Drop missing values
+    df = df.dropna()
+
+    if df.empty:
+        raise ValueError("❌ Dataframe empty after adding indicators and dropping NaN.")
 
     # Features and target
-    X = df[["MA50", "MA200", "RSI"]]
-    y = df["Close"]
+    X = df[["RSI", "MACD", "Volume"]]
+    y = df["Close"].shift(-5)  # predict 5 days ahead
+
+    # Drop NaNs caused by shifting
+    X = X[:-5]
+    y = y[:-5]
+
+    if X.empty or y.empty:
+        raise ValueError("❌ Not enough data for training after shift.")
+
+    # Train-test split
+    split = int(0.8 * len(X))
+    X_train, X_test = X[:split], X[split:]
+    y_train, y_test = y[:split], y[split:]
 
     # Train model
+    print("🤖 Training Linear Regression model...")
     model = LinearRegression()
-    model.fit(X, y)
+    model.fit(X_train, y_train)
+
+    # Save model
+    model_filename = "btc_xgb_5day_model_latest.joblib"
+    joblib.dump(model, model_filename)
+    print(f"✅ Model saved as {model_filename}")
 
     # Predictions
-    y_pred = model.predict(X)
+    y_pred = model.predict(X_test)
 
-    mse = mean_squared_error(y, y_pred)
-    r2 = r2_score(y, y_pred)
+    # Plot Predictions
+    plt.figure(figsize=(10, 6))
+    plt.plot(y_test.index, y_test, label="Actual")
+    plt.plot(y_test.index, y_pred, label="Predicted")
+    plt.legend()
+    plt.title("BTC Price Prediction (5 days ahead)")
+    plt.xlabel("Date")
+    plt.ylabel("Price (USD)")
+    plt.grid(True)
+    plt.tight_layout()
+    plt.savefig("btc_prediction.png")
+    print("📊 Prediction plot saved as btc_prediction.png")
 
-    print("Model Performance:")
-    print(f"  MSE: {mse:.2f}")
-    print(f"  R²: {r2:.2f}")
+    # Plot RSI
+    plt.figure(figsize=(10, 4))
+    plt.plot(df.index, df["RSI"], label="RSI")
+    plt.axhline(70, color="red", linestyle="--")
+    plt.axhline(30, color="green", linestyle="--")
+    plt.legend()
+    plt.title("BTC RSI")
+    plt.grid(True)
+    plt.tight_layout()
+    plt.savefig("btc_rsi.png")
+    print("📊 RSI plot saved as btc_rsi.png")
 
-    # Predict 5 days ahead
-    last_features = X.iloc[-1].values.reshape(1, -1)
-    future_price = model.predict(last_features)[0]
-    print(f"Predicted BTC price (5-day ahead): {future_price:.2f} USD")
+    # Plot MACD
+    plt.figure(figsize=(10, 4))
+    plt.plot(df.index, df["MACD"], label="MACD", color="blue")
+    plt.legend()
+    plt.title("BTC MACD")
+    plt.grid(True)
+    plt.tight_layout()
+    plt.savefig("btc_macd.png")
+    print("📊 MACD plot saved as btc_macd.png")
 
-    # Generate plots
-    plot_prices(df)
-    plot_rsi(df)
-    plot_volume(df)
+    # Plot Volume
+    plt.figure(figsize=(10, 4))
+    plt.bar(df.index, df["Volume"], label="Volume", color="gray")
+    plt.legend()
+    plt.title("BTC Trading Volume")
+    plt.grid(True)
+    plt.tight_layout()
+    plt.savefig("btc_volume.png")
+    print("📊 Volume plot saved as btc_volume.png")
 
 
 if __name__ == "__main__":
