@@ -1,79 +1,86 @@
 from reportlab.lib.pagesizes import A4
-from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Image, Table, TableStyle
+from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Image
 from reportlab.lib.styles import getSampleStyleSheet
-from reportlab.lib import colors
+import joblib
 import pandas as pd
+import os
 
-# === Settings ===
-REPORT_FILE = "btc_report.pdf"
-PREDICTIONS_FILE = "btc_predictions.csv"
+# ==============================
+# Load latest prediction from model
+# ==============================
+def get_latest_prediction():
+    # Load last row of btc_data.csv for features
+    df = pd.read_csv("btc_data.csv")
+    model = joblib.load("btc_xgb_5day_model_latest.joblib")
 
-# Charts generated earlier
-charts = [
-    ("Bitcoin 5-Day Price Prediction", "btc_prediction.png"),
-    ("Relative Strength Index (RSI)", "btc_rsi.png"),
-    ("MACD Indicator", "btc_macd.png"),
-    ("Trading Volume", "btc_volume.png"),
-]
+    # Feature Engineering (must match train script)
+    df["Return"] = df["Close"].pct_change()
+    df["RSI"] = compute_rsi(df["Close"])
+    df["MACD"], df["Signal"] = compute_macd(df["Close"])
+    df["Volume_Change"] = df["Volume"].pct_change()
+    df.dropna(inplace=True)
 
-# === Create PDF ===
+    latest_features = df[["Close", "Return", "RSI", "MACD", "Signal", "Volume_Change"]].iloc[-1:].values
+    prediction = model.predict(latest_features)[0]
+    return prediction
+
+# ==============================
+# RSI and MACD helpers
+# ==============================
+def compute_rsi(series, period=14):
+    delta = series.diff()
+    gain = (delta.where(delta > 0, 0)).rolling(window=period).mean()
+    loss = (-delta.where(delta < 0, 0)).rolling(window=period).mean()
+    rs = gain / loss
+    return 100 - (100 / (1 + rs))
+
+def compute_macd(series, short=12, long=26, signal=9):
+    short_ema = series.ewm(span=short, adjust=False).mean()
+    long_ema = series.ewm(span=long, adjust=False).mean()
+    macd = short_ema - long_ema
+    signal_line = macd.ewm(span=signal, adjust=False).mean()
+    return macd, signal_line
+
+# ==============================
+# Report generator
+# ==============================
 def generate_report():
-    doc = SimpleDocTemplate(REPORT_FILE, pagesize=A4)
+    prediction = get_latest_prediction()
+
+    doc = SimpleDocTemplate("btc_analysis_report.pdf", pagesize=A4)
     styles = getSampleStyleSheet()
-    story = []
+    elements = []
 
     # Title
-    story.append(Paragraph("📊 Bitcoin Price Prediction Report", styles['Title']))
-    story.append(Spacer(1, 12))
+    elements.append(Paragraph("Bitcoin Analysis Report", styles["Title"]))
+    elements.append(Spacer(1, 12))
 
-    # Intro
-    story.append(Paragraph(
-        "This report provides technical analysis of Bitcoin (BTC-USD) using "
-        "machine learning and technical indicators. The model predicts the next 5 days of BTC price trends.",
-        styles['BodyText']
+    # Prediction text
+    elements.append(Paragraph(
+        f"<b>Predicted BTC Price (5-day ahead):</b> ${prediction:,.2f} USD",
+        styles["Normal"]
     ))
-    story.append(Spacer(1, 12))
+    elements.append(Spacer(1, 12))
 
-    # Load Predictions
-    try:
-        predictions = pd.read_csv(PREDICTIONS_FILE)
-        story.append(Paragraph("📅 Next 5-Day BTC Price Forecast", styles['Heading2']))
+    # Add plots if available
+    plots = [
+        ("btc_prediction.png", "BTC Price Prediction"),
+        ("btc_rsi.png", "Relative Strength Index (RSI)"),
+        ("btc_macd.png", "MACD Indicator"),
+        ("btc_volume.png", "BTC Trading Volume"),
+    ]
 
-        # Convert to table
-        data = [["Date", "Predicted BTC Price (USD)"]]
-        for _, row in predictions.iterrows():
-            data.append([row["Date"], f"${row['Predicted_BTC_Price']:.2f}"])
+    for plot_file, caption in plots:
+        if os.path.exists(plot_file):
+            elements.append(Paragraph(caption, styles["Heading2"]))
+            elements.append(Image(plot_file, width=400, height=200))
+            elements.append(Spacer(1, 12))
 
-        table = Table(data, colWidths=[200, 200])
-        table.setStyle(TableStyle([
-            ("BACKGROUND", (0,0), (-1,0), colors.HexColor("#003366")),
-            ("TEXTCOLOR", (0,0), (-1,0), colors.white),
-            ("ALIGN", (0,0), (-1,-1), "CENTER"),
-            ("FONTNAME", (0,0), (-1,0), "Helvetica-Bold"),
-            ("FONTSIZE", (0,0), (-1,-1), 10),
-            ("BOTTOMPADDING", (0,0), (-1,0), 8),
-            ("BACKGROUND", (0,1), (-1,-1), colors.whitesmoke),
-            ("GRID", (0,0), (-1,-1), 0.25, colors.black),
-        ]))
-        story.append(table)
-        story.append(Spacer(1, 20))
-    except Exception as e:
-        story.append(Paragraph(f"⚠️ Could not load predictions: {e}", styles['BodyText']))
-        story.append(Spacer(1, 20))
+    doc.build(elements)
+    print("✅ Report generated: btc_analysis_report.pdf")
 
-    # Add Charts
-    story.append(Paragraph("📉 Technical Analysis Charts", styles['Heading2']))
-    for title, path in charts:
-        try:
-            story.append(Paragraph(title, styles['Heading3']))
-            story.append(Image(path, width=400, height=200))
-            story.append(Spacer(1, 12))
-        except Exception as e:
-            story.append(Paragraph(f"⚠️ Could not load chart {path}: {e}", styles['BodyText']))
-
-    # Build PDF
-    doc.build(story)
-    print(f"✅ Report generated and saved as {REPORT_FILE}")
-
+# ==============================
+# Run
+# ==============================
 if __name__ == "__main__":
     generate_report()
