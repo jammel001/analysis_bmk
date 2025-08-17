@@ -56,15 +56,16 @@ def get_latest_prediction():
 def generate_report():
     latest = get_latest_prediction()
 
+    # Explicitly cast to float
     report = f"""
     📊 BTC Prediction Report
     ------------------------
     Date: {latest.name.date()}
-    Close Price: {latest['Close']:.2f}
-    RSI: {latest['RSI']:.2f}
-    MACD: {latest['MACD']:.2f}
-    Signal Line: {latest['Signal_Line']:.2f}
-    🔮 Predicted Price (5-day): {latest['Prediction']:.2f}
+    Close Price: {float(latest['Close']):.2f}
+    RSI: {float(latest['RSI']):.2f}
+    MACD: {float(latest['MACD']):.2f}
+    Signal Line: {float(latest['Signal_Line']):.2f}
+    🔮 Predicted Price (5-day): {float(latest['Prediction']):.2f}
     """
 
     print(report)
