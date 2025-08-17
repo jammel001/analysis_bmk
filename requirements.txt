@@ -1,0 +1,9 @@
+pandas
+numpy
+yfinance
+ta
+xgboost
+joblib
+plotly
+matplotlib
+seaborn
