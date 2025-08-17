@@ -2,75 +2,83 @@ import yfinance as yf
 import pandas as pd
 import numpy as np
 import joblib
-from xgboost import XGBRegressor
-from sklearn.model_selection import train_test_split
-from sklearn.metrics import mean_squared_error, r2_score
 import matplotlib.pyplot as plt
-import os
-from datetime import datetime, timedelta
+import xgboost as xgb
+from sklearn.model_selection import train_test_split
+from sklearn.metrics import mean_squared_error
 
-# === SETTINGS ===
-MODEL_FILE = "btc_xgb_5day_model_latest.joblib"
-PREDICTION_PNG = "btc_prediction.png"
-PREDICTIONS_FILE = "btc_predictions.csv"
+# -----------------------------
+# 1. Fetch BTC data
+# -----------------------------
+btc = yf.download("BTC-USD", start="2014-01-01", auto_adjust=False)
 
-# === Fetch Bitcoin Data (since 2014) ===
-btc = yf.download("BTC-USD", start="2014-01-01")
+# Ensure we have Adj Close (fallback to Close if missing)
+if "Adj Close" in btc.columns:
+    btc["Price"] = btc["Adj Close"]
+else:
+    print("⚠️ Warning: 'Adj Close' not found, using 'Close' instead")
+    btc["Price"] = btc["Close"]
 
-# === Feature Engineering ===
-btc["Return"] = btc["Adj Close"].pct_change()
-btc["SMA_10"] = btc["Adj Close"].rolling(window=10).mean()
-btc["SMA_50"] = btc["Adj Close"].rolling(window=50).mean()
-btc["RSI"] = 100 - (100 / (1 + btc["Return"].rolling(14).mean()))
+# -----------------------------
+# 2. Feature engineering
+# -----------------------------
+btc["Return"] = btc["Price"].pct_change()
+btc["SMA_10"] = btc["Price"].rolling(window=10).mean()
+btc["SMA_50"] = btc["Price"].rolling(window=50).mean()
+
+# RSI
+delta = btc["Price"].diff()
+gain = (delta.where(delta > 0, 0)).rolling(14).mean()
+loss = (-delta.where(delta < 0, 0)).rolling(14).mean()
+rs = gain / loss
+btc["RSI"] = 100 - (100 / (1 + rs))
+
+# MACD
+ema12 = btc["Price"].ewm(span=12, adjust=False).mean()
+ema26 = btc["Price"].ewm(span=26, adjust=False).mean()
+btc["MACD"] = ema12 - ema26
+btc["Signal"] = btc["MACD"].ewm(span=9, adjust=False).mean()
+
+# Drop NaN rows
 btc = btc.dropna()
 
-# Shift target (predict 5 days ahead)
-btc["Target"] = btc["Adj Close"].shift(-5)
+# -----------------------------
+# 3. Prepare dataset
+# -----------------------------
+X = btc[["Return", "SMA_10", "SMA_50", "RSI", "MACD", "Signal"]]
+y = btc["Price"].shift(-5)  # predict 5 days ahead
 btc = btc.dropna()
 
-# Features and Target
-X = btc[["Adj Close", "SMA_10", "SMA_50", "RSI", "Volume"]]
-y = btc["Target"]
+X = X.iloc[:-5]
+y = y.dropna()
 
-# Train-test split
 X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, shuffle=False)
 
-# === Load or Train Model ===
-if os.path.exists(MODEL_FILE):
-    model = joblib.load(MODEL_FILE)
-    print("✅ Loaded existing model")
-else:
-    model = XGBRegressor(objective="reg:squarederror", n_estimators=500, learning_rate=0.05, max_depth=6)
-    model.fit(X_train, y_train)
-    joblib.dump(model, MODEL_FILE)
-    print("✅ Trained and saved new model")
+# -----------------------------
+# 4. Train model
+# -----------------------------
+model = xgb.XGBRegressor(objective="reg:squarederror", n_estimators=200)
+model.fit(X_train, y_train)
 
-# === Evaluate Model ===
+# -----------------------------
+# 5. Evaluate
+# -----------------------------
 y_pred = model.predict(X_test)
 rmse = np.sqrt(mean_squared_error(y_test, y_pred))
-r2 = r2_score(y_test, y_pred)
-print(f"Model Performance → RMSE: {rmse:.2f}, R²: {r2:.4f}")
+print("✅ RMSE:", rmse)
 
-# === Predict Next 5 Days ===
-last_data = X.tail(5).copy()
-future_predictions = model.predict(last_data)
+# -----------------------------
+# 6. Save model
+# -----------------------------
+joblib.dump(model, "btc_xgb_5day_model_latest.joblib")
 
-future_dates = pd.date_range(datetime.today() + timedelta(days=1), periods=5)
-pred_df = pd.DataFrame({"Date": future_dates, "Predicted_BTC_Price": future_predictions})
-
-# Save predictions to CSV
-pred_df.to_csv(PREDICTIONS_FILE, index=False)
-print(f"✅ Saved predictions to {PREDICTIONS_FILE}")
-
-# === Plot Predictions ===
-plt.figure(figsize=(10, 5))
-plt.plot(btc.index[-200:], btc["Adj Close"].tail(200), label="Historical")
-plt.plot(future_dates, future_predictions, "ro--", label="Predicted (5 days)")
-plt.xlabel("Date")
-plt.ylabel("BTC Price (USD)")
-plt.title("Bitcoin Price Prediction (5 days ahead)")
+# -----------------------------
+# 7. Plot prediction vs actual
+# -----------------------------
+plt.figure(figsize=(12, 6))
+plt.plot(y_test.index, y_test, label="Actual Price", color="blue")
+plt.plot(y_test.index, y_pred, label="Predicted Price", color="red")
+plt.title("BTC 5-Day Ahead Prediction")
 plt.legend()
-plt.grid(True)
-plt.savefig(PREDICTION_PNG)
+plt.savefig("btc_prediction.png")
 plt.close()
-print(f"✅ Prediction chart saved to {PREDICTION_PNG}")
