@@ -6,85 +6,64 @@ from sklearn.linear_model import LinearRegression
 from sklearn.metrics import mean_squared_error, r2_score
 import datetime
 
-
-# ==============================
-# Technical Indicators
-# ==============================
-
-def compute_rsi(series, period=14):
-    """Compute Relative Strength Index (RSI)."""
-    delta = series.diff().dropna().values.flatten()  # ensure 1D
-    gain = np.where(delta > 0, delta, 0)
-    loss = np.where(delta < 0, -delta, 0)
-
-    avg_gain = pd.Series(gain).rolling(period).mean()
-    avg_loss = pd.Series(loss).rolling(period).mean()
-
-    rs = avg_gain / avg_loss
-    rsi = 100 - (100 / (1 + rs))
-
-    # Align with index
-    rsi = pd.Series(rsi, index=series.index[-len(rsi):])
-    return rsi.reindex(series.index)
-
-
+# =========================
+# Helper functions
+# =========================
 def add_indicators(df):
-    """Add Moving Averages and RSI to dataframe."""
-    df["MA50"] = df["Close"].rolling(50).mean()
-    df["MA200"] = df["Close"].rolling(200).mean()
+    # Moving averages with min_periods=1 (keeps early rows)
+    df["MA50"] = df["Close"].rolling(window=50, min_periods=1).mean()
+    df["MA200"] = df["Close"].rolling(window=200, min_periods=1).mean()
     df["RSI"] = compute_rsi(df["Close"], 14)
     return df
 
+def compute_rsi(series, period=14):
+    delta = series.diff()
+    gain = np.where(delta > 0, delta, 0)
+    loss = np.where(delta < 0, -delta, 0)
 
-# ==============================
-# Plotting Functions
-# ==============================
+    avg_gain = pd.Series(gain).rolling(window=period, min_periods=1).mean()
+    avg_loss = pd.Series(loss).rolling(window=period, min_periods=1).mean()
+
+    rs = avg_gain / (avg_loss + 1e-10)  # avoid division by zero
+    rsi = 100 - (100 / (1 + rs))
+    return rsi
 
 def plot_prices(df):
-    plt.figure(figsize=(12, 6))
-    plt.plot(df["Close"], label="Close Price", color="blue")
-    plt.plot(df["MA50"], label="50-day MA", color="orange")
-    plt.plot(df["MA200"], label="200-day MA", color="red")
-    plt.title("Bitcoin Price with Moving Averages")
+    plt.figure(figsize=(12,6))
+    plt.plot(df.index, df["Close"], label="BTC Close", color="blue")
+    plt.plot(df.index, df["MA50"], label="MA50", color="orange")
+    plt.plot(df.index, df["MA200"], label="MA200", color="red")
+    plt.title("BTC Price with Moving Averages")
     plt.xlabel("Date")
     plt.ylabel("Price (USD)")
     plt.legend()
-    plt.grid()
-    plt.tight_layout()
-    plt.savefig("price_ma.png")
-    plt.close()
-
+    plt.grid(True)
+    plt.show()
 
 def plot_rsi(df):
-    plt.figure(figsize=(12, 4))
-    plt.plot(df["RSI"], label="RSI", color="green")
-    plt.axhline(70, linestyle="--", color="red")
-    plt.axhline(30, linestyle="--", color="blue")
+    plt.figure(figsize=(12,4))
+    plt.plot(df.index, df["RSI"], label="RSI", color="green")
+    plt.axhline(70, color="red", linestyle="--")
+    plt.axhline(30, color="blue", linestyle="--")
     plt.title("Relative Strength Index (RSI)")
     plt.xlabel("Date")
     plt.ylabel("RSI")
     plt.legend()
-    plt.grid()
-    plt.tight_layout()
-    plt.savefig("rsi.png")
-    plt.close()
-
+    plt.grid(True)
+    plt.show()
 
 def plot_volume(df):
-    plt.figure(figsize=(12, 4))
-    plt.bar(df.index, df["Volume"].values, color="purple", alpha=0.6)
-    plt.title("Trading Volume")
+    plt.figure(figsize=(12,4))
+    plt.bar(df.index, df["Volume"], color="purple", alpha=0.6, width=1.0)
+    plt.title("BTC Trading Volume")
     plt.xlabel("Date")
     plt.ylabel("Volume")
-    plt.tight_layout()
-    plt.savefig("volume.png")
-    plt.close()
+    plt.grid(True)
+    plt.show()
 
-
-# ==============================
-# Training & Prediction
-# ==============================
-
+# =========================
+# Main pipeline
+# =========================
 def train_and_predict():
     start = "2014-01-01"
     end = datetime.datetime.today().strftime("%Y-%m-%d")
@@ -94,7 +73,10 @@ def train_and_predict():
 
     # Add indicators
     df = add_indicators(df)
-    df.dropna(inplace=True)
+    df.dropna(inplace=True)  # should keep early rows now
+
+    if df.empty or len(df) < 100:
+        raise ValueError("Not enough data after indicators. Check date range or reduce MA windows.")
 
     # Features and target
     X = df[["MA50", "MA200", "RSI"]]
@@ -125,23 +107,5 @@ def train_and_predict():
     plot_volume(df)
 
 
-# ==============================
-# Unit Test
-# ==============================
-
-def test_compute_rsi():
-    """Simple test for RSI function to avoid shape errors."""
-    test_series = pd.Series([1, 2, 3, 4, 5, 6, 7, 8, 9, 10])
-    rsi = compute_rsi(test_series, period=5)
-    assert isinstance(rsi, pd.Series), "RSI output should be a Pandas Series"
-    assert len(rsi) == len(test_series), "RSI length must match input series"
-    print("✅ RSI test passed!")
-
-
-# ==============================
-# Main
-# ==============================
-
 if __name__ == "__main__":
-    test_compute_rsi()
     train_and_predict()
