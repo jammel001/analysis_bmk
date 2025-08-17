@@ -7,11 +7,13 @@ import numpy as np
 
 # --- Indicator Functions ---
 def compute_rsi(series, period=14):
-    delta = series.diff()
-    gain = np.where(delta > 0, delta, 0)
-    loss = np.where(delta < 0, -delta, 0)
-    avg_gain = pd.Series(gain).rolling(window=period, min_periods=1).mean()
-    avg_loss = pd.Series(loss).rolling(window=period, min_periods=1).mean()
+    delta = series.diff().values.flatten()   # ensure 1D
+    gain = np.where(delta > 0, delta, 0).flatten()
+    loss = np.where(delta < 0, -delta, 0).flatten()
+
+    avg_gain = pd.Series(gain, index=series.index).rolling(window=period, min_periods=1).mean()
+    avg_loss = pd.Series(loss, index=series.index).rolling(window=period, min_periods=1).mean()
+
     rs = avg_gain / avg_loss.replace(0, 1e-10)  # avoid division by zero
     return 100 - (100 / (1 + rs))
 
