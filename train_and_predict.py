@@ -2,125 +2,130 @@ import yfinance as yf
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
-from xgboost import XGBRegressor
-import joblib
+from sklearn.preprocessing import MinMaxScaler
+from sklearn.linear_model import LinearRegression
 from datetime import datetime, timedelta
 
-# ==============================
+# ===============================
 # Download BTC data
-# ==============================
-def fetch_data():
+# ===============================
+def load_data():
     end = datetime.today()
-    start = end - timedelta(days=365*2)  # last 2 years
+    start = end - timedelta(days=365 * 2)  # last 2 years
     df = yf.download("BTC-USD", start=start, end=end)
-    df.to_csv("btc_data.csv")
+    df.dropna(inplace=True)
     return df
 
-# ==============================
-# Feature Engineering
-# ==============================
-def add_features(df):
-    df["Return"] = df["Close"].pct_change()
-    df["RSI"] = compute_rsi(df["Close"])
-    df["MACD"], df["Signal"] = compute_macd(df["Close"])
-    df["Volume_Change"] = df["Volume"].pct_change()
-    df.dropna(inplace=True)
+# ===============================
+# Technical indicators
+# ===============================
+def add_indicators(df):
+    df["SMA_20"] = df["Close"].rolling(window=20).mean()
+    df["SMA_50"] = df["Close"].rolling(window=50).mean()
+    df["RSI"] = compute_rsi(df["Close"], 14)
     return df
 
 def compute_rsi(series, period=14):
     delta = series.diff()
-    gain = (delta.where(delta > 0, 0)).rolling(window=period).mean()
-    loss = (-delta.where(delta < 0, 0)).rolling(window=period).mean()
-    rs = gain / loss
-    return 100 - (100 / (1 + rs))
+    gain = np.where(delta > 0, delta, 0)
+    loss = np.where(delta < 0, -delta, 0)
 
-def compute_macd(series, short=12, long=26, signal=9):
-    short_ema = series.ewm(span=short, adjust=False).mean()
-    long_ema = series.ewm(span=long, adjust=False).mean()
-    macd = short_ema - long_ema
-    signal_line = macd.ewm(span=signal, adjust=False).mean()
-    return macd, signal_line
+    avg_gain = pd.Series(gain).rolling(period).mean()
+    avg_loss = pd.Series(loss).rolling(period).mean()
 
-# ==============================
-# Train & Predict
-# ==============================
-def train_and_predict():
-    df = fetch_data()
-    df = add_features(df)
+    rs = avg_gain / avg_loss
+    rsi = 100 - (100 / (1 + rs))
+    return rsi
 
-    # target: next 5-day average close
-    df["Target"] = df["Close"].shift(-5).rolling(5).mean()
-    df.dropna(inplace=True)
-
-    X = df[["Close", "Return", "RSI", "MACD", "Signal", "Volume_Change"]]
-    y = df["Target"]
-
-    model = XGBRegressor(n_estimators=200, learning_rate=0.05, max_depth=5)
-    model.fit(X, y)
-
-    joblib.dump(model, "btc_xgb_5day_model_latest.joblib")
-
-    # Prediction for last known values
-    latest_features = X.iloc[-1:].values
-    prediction = model.predict(latest_features)[0]
-    print(f"Predicted BTC price (5-day ahead): {prediction:.2f} USD")
-
-    # Save plots
-    plot_prediction(df, prediction)
-    plot_rsi(df)
-    plot_macd(df)
-    plot_volume(df)
-
-    return prediction
-
-# ==============================
+# ===============================
 # Plot functions
-# ==============================
-def plot_prediction(df, prediction):
-    plt.figure(figsize=(10, 5))
-    plt.plot(df.index, df["Close"], label="BTC Close Price")
-    plt.axhline(prediction, color="r", linestyle="--", label="5-day Prediction")
-    plt.title("BTC Price Prediction")
+# ===============================
+def plot_price(df):
+    plt.figure(figsize=(10, 6))
+    plt.plot(df.index, df["Close"], label="Close Price", color="blue")
+    plt.plot(df.index, df["SMA_20"], label="SMA 20", color="orange")
+    plt.plot(df.index, df["SMA_50"], label="SMA 50", color="green")
+    plt.title("BTC Price with Moving Averages")
     plt.xlabel("Date")
     plt.ylabel("Price (USD)")
     plt.legend()
-    plt.savefig("btc_prediction.png")
+    plt.tight_layout()
+    plt.savefig("btc_price.png")
     plt.close()
 
 def plot_rsi(df):
-    plt.figure(figsize=(10, 4))
-    plt.plot(df.index, df["RSI"], label="RSI", color="orange")
-    plt.axhline(70, linestyle="--", color="red")
-    plt.axhline(30, linestyle="--", color="green")
-    plt.title("Relative Strength Index (RSI)")
+    plt.figure(figsize=(10, 6))
+    plt.plot(df.index, df["RSI"], label="RSI", color="red")
+    plt.axhline(70, linestyle="--", color="gray")
+    plt.axhline(30, linestyle="--", color="gray")
+    plt.title("BTC Relative Strength Index (RSI)")
     plt.xlabel("Date")
-    plt.ylabel("RSI")
+    plt.ylabel("RSI Value")
     plt.legend()
+    plt.tight_layout()
     plt.savefig("btc_rsi.png")
     plt.close()
 
-def plot_macd(df):
-    plt.figure(figsize=(10, 4))
-    plt.plot(df.index, df["MACD"], label="MACD", color="blue")
-    plt.plot(df.index, df["Signal"], label="Signal Line", color="red")
-    plt.title("MACD Indicator")
-    plt.xlabel("Date")
-    plt.ylabel("Value")
-    plt.legend()
-    plt.savefig("btc_macd.png")
-    plt.close()
-
 def plot_volume(df):
-    plt.figure(figsize=(10, 4))
-    plt.bar(df.index, df["Volume"], color="purple", alpha=0.6)
+    plt.figure(figsize=(10, 6))
+    if len(df) > 200:  # fallback to line plot for large datasets
+        plt.plot(df.index, df["Volume"].values, color="purple", alpha=0.6, label="Volume")
+        plt.legend()
+    else:
+        plt.bar(df.index.astype(str), df["Volume"].values, color="purple", alpha=0.6)
     plt.title("BTC Trading Volume")
     plt.xlabel("Date")
     plt.ylabel("Volume")
+    plt.xticks(rotation=45)
+    plt.tight_layout()
     plt.savefig("btc_volume.png")
     plt.close()
 
-# ==============================
-# Run
-# ==============================
+# ===============================
+# Model training and prediction
+# ===============================
+def prepare_features(df):
+    df = df.dropna().copy()
+    features = df[["SMA_20", "SMA_50", "RSI"]]
+    target = df["Close"].shift(-5)  # predict 5 days ahead
+    features = features[:-5]
+    target = target[:-5]
+
+    scaler = MinMaxScaler()
+    X_scaled = scaler.fit_transform(features)
+
+    return X_scaled, target, scaler
+
+def train_model(X, y):
+    model = LinearRegression()
+    model.fit(X, y)
+    return model
+
+def predict_future(df, model, scaler):
+    last_row = df.iloc[-1][["SMA_20", "SMA_50", "RSI"]].values.reshape(1, -1)
+    last_scaled = scaler.transform(last_row)
+    prediction = model.predict(last_scaled)
+    return prediction[0]
+
+# ===============================
+# Main execution
+# ===============================
+def train_and_predict():
+    df = load_data()
+    df = add_indicators(df)
+
+    # Generate plots
+    plot_price(df)
+    plot_rsi(df)
+    plot_volume(df)
+
+    # Prepare ML data
+    X, y, scaler = prepare_features(df)
+    model = train_model(X, y)
+
+    # Make prediction
+    future_price = predict_future(df, model, scaler)
+    print(f"Predicted BTC price (5-day ahead): {future_price:.2f} USD")
+
 if __name__ == "__main__":
     train_and_predict()
