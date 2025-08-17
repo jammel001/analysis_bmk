@@ -1,85 +1,76 @@
 # dashboard.py
 import pandas as pd
-import plotly.graph_objs as go
-from plotly.subplots import make_subplots
+from jinja2 import Template
 
-# Load dataset + predictions
-df = pd.read_csv("btc_dataset.csv", parse_dates=["Date"])
-pred_df = pd.read_csv("btc_predictions.csv", parse_dates=["Date"])
+# =========================
+# 1. Load Predictions
+# =========================
+pred_df = pd.read_csv("btc_predictions.csv")
 
-# Merge predictions into main dataset
-df = df.merge(pred_df, on="Date", how="left")
+# =========================
+# 2. HTML Template
+# =========================
+html_template = """
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Bitcoin Price Dashboard</title>
+  <style>
+    body { font-family: Arial, sans-serif; background: #f5f5f5; text-align: center; }
+    h1 { color: #333; }
+    table { margin: auto; border-collapse: collapse; width: 50%; background: white; }
+    th, td { border: 1px solid #ccc; padding: 10px; text-align: center; }
+    th { background: #333; color: white; }
+    img { margin: 15px; max-width: 80%; border-radius: 8px; box-shadow: 0 4px 8px rgba(0,0,0,0.2); }
+    .footer { margin-top: 20px; font-size: 14px; color: #777; }
+  </style>
+</head>
+<body>
+  <h1>📈 Bitcoin Price Prediction Dashboard</h1>
+  <p>Latest 5-day forecast (auto-updated daily)</p>
 
-# Create figure with subplots
-fig = make_subplots(
-    rows=4, cols=1,
-    shared_xaxes=True,
-    vertical_spacing=0.05,
-    row_heights=[0.45, 0.15, 0.2, 0.2],
-    subplot_titles=("Bitcoin Price + Predictions + Bollinger Bands", "Volume", "RSI", "MACD")
+  <table>
+    <tr>
+      <th>Date</th>
+      <th>Predicted Close (USD)</th>
+    </tr>
+    {% for row in predictions %}
+    <tr>
+      <td>{{ row.Date }}</td>
+      <td>{{ "%.2f"|format(row.Predicted_Close) }}</td>
+    </tr>
+    {% endfor %}
+  </table>
+
+  <h2>📊 Prediction Chart</h2>
+  <img src="../btc_prediction.png" alt="Prediction Chart">
+
+  <h2>📊 Technical Indicators</h2>
+  <img src="../btc_rsi.png" alt="RSI">
+  <img src="../btc_macd.png" alt="MACD">
+  <img src="../btc_volume.png" alt="Volume">
+
+  <div class="footer">
+    <p>Auto-generated on {{ generated_date }}</p>
+  </div>
+</body>
+</html>
+"""
+
+# =========================
+# 3. Render HTML
+# =========================
+template = Template(html_template)
+html_content = template.render(
+    predictions=pred_df.to_dict(orient="records"),
+    generated_date=pd.Timestamp.now().strftime("%Y-%m-%d %H:%M")
 )
 
-# --- 1. Bitcoin Price + Predictions + Bollinger Bands ---
-fig.add_trace(
-    go.Scatter(x=df["Date"], y=df["Close"], mode="lines", name="BTC Close"),
-    row=1, col=1
-)
+# =========================
+# 4. Save HTML in /docs
+# =========================
+with open("docs/btc_dashboard.html", "w") as f:
+    f.write(html_content)
 
-# Bollinger Bands (Upper & Lower)
-fig.add_trace(
-    go.Scatter(x=df["Date"], y=df["BB_upper"], mode="lines",
-               line=dict(width=1, color="rgba(255,0,0,0.4)"),
-               name="BB Upper", showlegend=True),
-    row=1, col=1
-)
-fig.add_trace(
-    go.Scatter(x=df["Date"], y=df["BB_lower"], mode="lines",
-               line=dict(width=1, color="rgba(0,0,255,0.4)"),
-               name="BB Lower", fill="tonexty", fillcolor="rgba(173,216,230,0.2)"),
-    row=1, col=1
-)
-
-# Add predicted future prices
-preds = df.dropna(subset=["Predicted_Close"])
-if not preds.empty:
-    fig.add_trace(
-        go.Scatter(x=preds["Date"], y=preds["Predicted_Close"],
-                   mode="lines+markers", name="Predicted 5-Day Ahead"),
-        row=1, col=1
-    )
-
-# --- 2. Trading Volume ---
-fig.add_trace(
-    go.Bar(x=df["Date"], y=df["Volume"], name="Volume", marker_color="rgba(0,0,150,0.5)"),
-    row=2, col=1
-)
-
-# --- 3. RSI ---
-fig.add_trace(
-    go.Scatter(x=df["Date"], y=df["RSI"], mode="lines", name="RSI"),
-    row=3, col=1
-)
-fig.add_hline(y=70, line_dash="dot", line_color="red", row=3, col=1)
-fig.add_hline(y=30, line_dash="dot", line_color="green", row=3, col=1)
-
-# --- 4. MACD ---
-fig.add_trace(
-    go.Scatter(x=df["Date"], y=df["MACD"], mode="lines", name="MACD"),
-    row=4, col=1
-)
-fig.add_trace(
-    go.Scatter(x=df["Date"], y=df["Signal"], mode="lines", name="Signal"),
-    row=4, col=1
-)
-
-# Layout
-fig.update_layout(
-    height=1100,
-    title="Bitcoin Daily Analysis Dashboard",
-    template="plotly_white",
-    legend=dict(orientation="h", y=-0.3)
-)
-
-# Save dashboard
-fig.write_html("btc_dashboard.html")
-print("✅ Dashboard saved as btc_dashboard.html")
+print("✅ Dashboard updated at docs/btc_dashboard.html")
