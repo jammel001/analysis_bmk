@@ -1,24 +1,38 @@
-# dashboard.py
-import pandas as pd
-from jinja2 import Template
-
-# =========================
-# 1. Load Predictions
-# =========================
-pred_df = pd.read_csv("btc_predictions.csv")
-
-from datetime import datetime
 import shutil
+import os
+from datetime import datetime
+import pandas as pd
 
-# Copy PDF report into docs
+# === SETTINGS ===
+PREDICTIONS_FILE = "btc_predictions.csv"   # we’ll save predictions into this file from train_and_predict.py
+REPORT_FILE = "btc_report.pdf"
+DOCS_DIR = "docs"
+DASHBOARD_FILE = os.path.join(DOCS_DIR, "btc_dashboard.html")
+
+# === Ensure /docs exists ===
+os.makedirs(DOCS_DIR, exist_ok=True)
+
+# === Copy the PDF report into /docs ===
 try:
-    shutil.copy("btc_report.pdf", "docs/btc_report.pdf")
-except:
-    pass
+    shutil.copy(REPORT_FILE, os.path.join(DOCS_DIR, REPORT_FILE))
+    print("✅ Report copied to docs/")
+except Exception as e:
+    print(f"⚠️ Could not copy report: {e}")
 
-# Add last update timestamp
+# === Load Predictions ===
+pred_table_html = "<p><i>No predictions available</i></p>"
+if os.path.exists(PREDICTIONS_FILE):
+    try:
+        preds = pd.read_csv(PREDICTIONS_FILE)
+        pred_table_html = preds.to_html(index=False, border=0, classes="pred-table")
+        print("✅ Predictions loaded for dashboard")
+    except Exception as e:
+        print(f"⚠️ Could not load predictions file: {e}")
+
+# === Timestamp ===
 last_updated = datetime.utcnow().strftime("%Y-%m-%d %H:%M UTC")
 
+# === Dashboard HTML ===
 dashboard_html = f"""
 <html>
 <head>
@@ -27,6 +41,19 @@ dashboard_html = f"""
         body {{ font-family: Arial, sans-serif; margin: 40px; background: #f8f9fa; }}
         h1 {{ color: #333; }}
         .chart {{ margin-bottom: 30px; }}
+        .pred-table {{
+            border-collapse: collapse;
+            margin-top: 15px;
+        }}
+        .pred-table th, .pred-table td {{
+            border: 1px solid #ccc;
+            padding: 8px 12px;
+            text-align: center;
+        }}
+        .pred-table th {{
+            background: #007BFF;
+            color: white;
+        }}
         a.download {{
             display: inline-block;
             margin-top: 20px;
@@ -37,18 +64,18 @@ dashboard_html = f"""
             border-radius: 5px;
         }}
         a.download:hover {{ background: #0056b3; }}
-        .timestamp {{ margin-top: 20px; color: #555; font-size: 14px; }}
+        .timestamp {{ color: #555; font-size: 14px; margin-top: 30px; }}
     </style>
 </head>
 <body>
     <h1>📊 Bitcoin Daily Dashboard</h1>
     <p>This dashboard updates automatically every day with the latest Bitcoin data, technical indicators, and predictions.</p>
 
-    <div class="timestamp">Last updated: {last_updated}</div>
-    
     <div class="chart">
         <h2>Prediction (Next 5 days)</h2>
         <img src="../btc_prediction.png" width="700">
+        <h3>Predicted Prices</h3>
+        {pred_table_html}
     </div>
     
     <div class="chart">
@@ -69,27 +96,14 @@ dashboard_html = f"""
     <h2>📄 Report</h2>
     <p>You can download the full BTC analysis report (PDF) with all charts and metrics:</p>
     <a href="btc_report.pdf" class="download">⬇️ Download Report</a>
+
+    <div class="timestamp">⏰ Last updated: {last_updated}</div>
 </body>
 </html>
 """
 
-with open("docs/btc_dashboard.html", "w") as f:
+# === Save dashboard in /docs ===
+with open(DASHBOARD_FILE, "w", encoding="utf-8") as f:
     f.write(dashboard_html)
 
-print("✅ Dashboard updated with timestamp")
- =========================
-# 3. Render HTML
-# =========================
-template = Template(html_template)
-html_content = template.render(
-    predictions=pred_df.to_dict(orient="records"),
-    generated_date=pd.Timestamp.now().strftime("%Y-%m-%d %H:%M")
-)
-
-# =========================
-# 4. Save HTML in /docs
-# =========================
-with open("docs/btc_dashboard.html", "w") as f:
-    f.write(html_content)
-
-print("✅ Dashboard updated at docs/btc_dashboard.html")
+print(f"✅ Dashboard updated: {DASHBOARD_FILE}")
