@@ -1,11 +1,71 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>BTC Analysis Dashboard</title>
-    <meta http-equiv="refresh" content="0; url='btc_dashboard.html'" />
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            margin: 0;
+            padding: 0;
+            background-color: #f8f9fa;
+            color: #333;
+        }
+        .redirect-container {
+            max-width: 600px;
+            margin: 100px auto;
+            padding: 30px;
+            background: white;
+            border-radius: 10px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+            text-align: center;
+        }
+        h1 {
+            color: #2c3e50;
+            margin-bottom: 20px;
+        }
+        .spinner {
+            border: 5px solid #f3f3f3;
+            border-top: 5px solid #3498db;
+            border-radius: 50%;
+            width: 50px;
+            height: 50px;
+            animation: spin 1s linear infinite;
+            margin: 20px auto;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        .btn {
+            display: inline-block;
+            padding: 12px 24px;
+            background-color: #3498db;
+            color: white;
+            text-decoration: none;
+            border-radius: 5px;
+            font-weight: bold;
+            margin-top: 20px;
+            transition: background-color 0.3s;
+        }
+        .btn:hover {
+            background-color: #2980b9;
+        }
+    </style>
 </head>
 <body>
-    Redirecting to dashboard...<br>
-    <a href="btc_dashboard.html">Click here if not redirected</a>
+    <div class="redirect-container">
+        <h1>Bitcoin Analysis Dashboard</h1>
+        <p>Loading the latest BTC technical analysis...</p>
+        <div class="spinner"></div>
+        <a href="btc_dashboard.html" class="btn">Go to Dashboard Now</a>
+    </div>
+    <script>
+        // Redirect after 3 seconds
+        setTimeout(function() {
+            window.location.href = "btc_dashboard.html";
+        }, 3000);
+    </script>
 </body>
 </html>
