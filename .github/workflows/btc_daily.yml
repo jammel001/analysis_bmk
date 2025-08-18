@@ -2,7 +2,7 @@ name: BTC Daily Analysis
 
 on:
   schedule:
-    - cron: "0 6 * * *"   # Runs every day at 06:00 UTC
+    - cron: "0 9 * * *"   # Runs every day at 06:00 UTC
   workflow_dispatch:       # Allow manual run from GitHub
 
 jobs:
