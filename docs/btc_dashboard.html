@@ -1,45 +1,170 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-    <title>BTC Dashboard</title>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>BTC Technical Dashboard</title>
     <style>
-        body { font-family: Arial; margin: 20px; }
-        .metric { margin-bottom: 30px; border: 1px solid #ddd; padding: 15px; }
-        img { max-width: 100%; height: auto; display: block; margin: 10px 0; }
+        :root {
+            --primary: #2c3e50;
+            --secondary: #3498db;
+            --accent: #e74c3c;
+            --light: #ecf0f1;
+            --dark: #2c3e50;
+        }
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            margin: 0;
+            padding: 0;
+            background-color: #f5f7fa;
+            color: var(--dark);
+            line-height: 1.6;
+        }
+        header {
+            background: var(--primary);
+            color: white;
+            padding: 20px 0;
+            text-align: center;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        .container {
+            max-width: 1200px;
+            margin: 30px auto;
+            padding: 0 20px;
+        }
+        .dashboard-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(500px, 1fr));
+            gap: 25px;
+            margin-bottom: 30px;
+        }
+        .card {
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+            padding: 20px;
+            transition: transform 0.3s;
+        }
+        .card:hover {
+            transform: translateY(-5px);
+        }
+        .card h2 {
+            color: var(--primary);
+            margin-top: 0;
+            border-bottom: 2px solid var(--light);
+            padding-bottom: 10px;
+        }
+        .chart-container {
+            margin-top: 15px;
+        }
+        .chart-container img {
+            width: 100%;
+            border-radius: 5px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+        }
+        .report-section {
+            background: white;
+            padding: 25px;
+            border-radius: 8px;
+            margin-top: 30px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        }
         .download-btn {
-            background: #4CAF50; color: white; 
-            padding: 10px 15px; text-decoration: none;
-            border-radius: 5px; display: inline-block;
+            display: inline-block;
+            background: var(--secondary);
+            color: white;
+            padding: 12px 25px;
+            text-decoration: none;
+            border-radius: 5px;
+            font-weight: bold;
+            margin-top: 15px;
+            transition: background 0.3s;
+        }
+        .download-btn:hover {
+            background: #2980b9;
+        }
+        footer {
+            text-align: center;
+            margin-top: 50px;
+            padding: 20px;
+            color: #7f8c8d;
+            font-size: 14px;
+        }
+        .last-updated {
+            font-style: italic;
+            color: #95a5a6;
+            text-align: right;
+            margin-top: 20px;
+        }
+        @media (max-width: 768px) {
+            .dashboard-grid {
+                grid-template-columns: 1fr;
+            }
         }
     </style>
 </head>
 <body>
+    <header>
+        <h1>Bitcoin Technical Analysis Dashboard</h1>
+        <p>Real-time indicators and predictive analytics</p>
+    </header>
 
-<div class="metric">
-    <h3>MACD Indicator</h3>
-    <img src="btc_macd.png" alt="BTC MACD Chart">
-</div>
+    <div class="container">
+        <div class="dashboard-grid">
+            <div class="card">
+                <h2>📈 Price Prediction</h2>
+                <div class="chart-container">
+                    <img src="btc_prediction.png" alt="BTC Price Prediction Chart">
+                </div>
+                <p>5-day price forecast based on technical indicators and machine learning models.</p>
+            </div>
 
-<div class="metric">
-    <h3>RSI Indicator</h3>
-    <img src="btc_rsi.png" alt="BTC RSI Chart">
-</div>
+            <div class="card">
+                <h2>📊 RSI Indicator</h2>
+                <div class="chart-container">
+                    <img src="btc_rsi.png" alt="BTC RSI Chart">
+                </div>
+                <p>Relative Strength Index (14-day period) showing overbought/oversold conditions.</p>
+            </div>
 
-<div class="metric">
-    <h3>Price Prediction</h3>
-    <img src="btc_prediction.png" alt="BTC Price Prediction">
-</div>
+            <div class="card">
+                <h2>📉 MACD Indicator</h2>
+                <div class="chart-container">
+                    <img src="btc_macd.png" alt="BTC MACD Chart">
+                </div>
+                <p>Moving Average Convergence Divergence showing trend direction and momentum.</p>
+            </div>
 
-<div class="metric">
-    <h3>Trading Volume</h3>
-    <img src="btc_volume.png" alt="BTC Volume Chart">
-</div>
+            <div class="card">
+                <h2>💎 Trading Volume</h2>
+                <div class="chart-container">
+                    <img src="btc_volume.png" alt="BTC Volume Chart">
+                </div>
+                <p>Daily trading volume with moving average to identify accumulation/distribution.</p>
+            </div>
+        </div>
 
-<div style="margin-top: 40px; text-align: center;">
-    <a href="btc_report.pdf" class="download-btn" download>
-        Download Full PDF Report
-    </a>
-</div>
+        <div class="report-section">
+            <h2>📑 Complete Analysis Report</h2>
+            <p>Download the full technical analysis report with detailed insights and predictions:</p>
+            <a href="btc_report.pdf" class="download-btn" download>
+                Download PDF Report
+            </a>
+            <div class="last-updated">
+                Last updated: <span id="update-time"></span>
+            </div>
+        </div>
+    </div>
 
+    <footer>
+        <p>BTC Analysis Dashboard | Data updates daily | Not financial advice</p>
+    </footer>
+
+    <script>
+        // Display current time
+        document.getElementById('update-time').textContent = new Date().toLocaleString();
+        
+        // You can add more interactive features here
+    </script>
 </body>
 </html>
